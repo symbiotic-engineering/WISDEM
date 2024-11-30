@@ -3,8 +3,13 @@ import sys
 import numpy as np
 import pandas as pd
 import openmdao.api as om
-
+import math
 from wisdem.commonse import gravity
+import pandas as pd
+import matplotlib.pyplot as plt
+import scipy.interpolate as interp
+from scipy.optimize import curve_fit
+from scipy import interpolate
 
 eps = 1e-3
 
@@ -952,6 +957,8 @@ class PMSG_Outer(GeneratorBase):
             R_out = (dia + 2 * h_m + 2 * h_yr + 2 * inputs["h_sr"]) * 0.5
             Losses = Losses
             generator_efficiency = gen_eff
+
+
         else:
             # Bad design
             for k in outputs.keys():
@@ -1360,6 +1367,137 @@ class PMSG_Disc(GeneratorBase):
         Slot_aspect_ratio = h_s / b_s
         alpha_p = np.pi / 2 * 0.7
 
+        
+            # import WecOptTool results csv
+            df = pd.read_csv('power_sensitivities_2.csv')
+
+            # extract the points where position is unconstrained
+            #max_x = df['x_max'].max()
+            #df_x_unconstrained = df[df['x_max'] == max_x]
+            df_x_unconstrained = df
+            force = df_x_unconstrained['f_max']
+            voltage = df_x_unconstrained['Vs_max']
+            power = -df_x_unconstrained['electrical Power']
+
+            # reshape to 2D
+            force_u = force.unique()
+            voltage_u = voltage.unique()
+            num_forces = len(force_u)
+            num_voltages = len(voltage_u)
+            force = force.values.reshape(num_forces, num_voltages)
+            voltage = voltage.values.reshape(num_forces, num_voltages)
+            power = power.values.reshape(num_forces, num_voltages)
+
+            # contour plot of power
+            plt.contourf(force/1000, voltage/1000, power/1000)
+            plt.colorbar(label='Power (kW)')
+            plt.scatter(force/1000, voltage/1000, c='k')
+            plt.xlabel('Force (kN)')
+            plt.ylabel('Voltage (kV)')
+
+            #print("power:\n", power)
+            P_max = np.max(power)
+            force_const = 280e3
+            voltage_const = 55e3
+            #Ftemp = list(np.linspace(100, 1000, 5))
+            #F = np.array([Ftemp, Ftemp, Ftemp, Ftemp, Ftemp]).flatten()
+            #Vtemp = list(np.linspace(0, 300, 5))
+            #V = np.array([Vtemp, Vtemp, Vtemp, Vtemp, Vtemp]).flatten()
+            #f, v = np.linspace(100, 1000, 5), np.linspace(0, 300, 5)
+            #F, V = np.meshgrid(f, v)
+            #def guess(f, v, af, av, bf, bv, fc, vc):
+            #    return P_max * (1 - np.exp(-(f/fc)**af)+bf) * (1 - np.exp(-(v/vc)**av)+bv)
+
+            def guess(f, v, a0, a1, a2, a3, a4, b1, b2, b3, b4, c1, c2, c3):
+                return P_max * (a4*f**4+a3*f**3+a2*f**2+a1*f+
+                                b4*v**4+b3*v**3+b2*v**2+b1*v+
+                                c3*(f*v)**3+c2*(f*v)**2+c1*f*v+
+                                a0)
+
+            def _guess(M, *args):
+                f, v = M
+                arr = guess(f, v, *args)
+                #arr = np.zeros(f.shape)
+                #for i in range(len(args)//6):
+                #    arr += guess(f, v, *args[i*6:i*6+6])
+                return arr
+
+            #xdata = np.vstack((F.ravel(), V.ravel()))
+            xdata = np.vstack((force.ravel(), voltage.ravel()))
+
+            p0 = [[-6.44573088e-02,  2.47574425e-06, -4.25647148e-12,  2.52700057e-18,
+            -4.40747842e-25,  3.68565273e-06, -3.81058251e-11,  1.32107747e-16,
+            -1.64089344e-22,  6.44846086e-12, -1.91233531e-23,  2.35070957e-35]]
+            # p0 = [1.5, 0.65, 0.075, 0.65, 280e3, 30e3]
+            # opt_param, cov = curve_fit(_guess, xdata, power.ravel(), p0=p0, bounds=((0, 0, 0, 0, 0.0001, 0.0001), (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)))
+            opt_param, cov = curve_fit(_guess, xdata, power.ravel(), p0=p0, bounds=((-np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf, -np.inf), (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)))
+            print('p0:\n', p0)
+            print('optimization parameters:\n',opt_param)
+
+            power_surrogate = guess(force, voltage, *opt_param)
+            power_surrogate = power_surrogate.reshape(num_forces, num_voltages)
+
+            ## Thermals to find max current
+            t_pulse = 5     #time which peak torque can be sustained (s)
+            T_amb = 30      #ambient/coolant temperature [degC]
+            T_max = 120     #max allowable winding temp [decC]
+            T_start = 50    #starting temp before a peak pulse (degC)
+            
+            h = 100     #heat transfer coeffiecient [W/m^2 degC]
+            K_wb = 0.5  #bar wire slot fill factor (-)
+            rho_cu = 8940
+            rho_0_cu = 1.68e-8
+            α_cu = 4.0e-3
+            R_sb = R_s-h_s        #radius of slot, toward the back of motor
+            d_sht = 0.00254       #distance from shoe to toe, assumed to 0.1 inch
+            R_sc = R_out+rad_ag+d_sht
+            A_s = math.pi/S*(R_sb**2-R_sc**2)-b_t*(R_sb-R_sc)   #area of single slot
+            m_cu = S*A_s*l_u*rho_cu                 #mass of copper
+            c_cu = 377  #physical constant
+            τ = m_cu*c_cu/(h*2*np.pi*R_s*l_u) #fix with stack length
+            T_ss_pk = T_start+(T_max-T_start)/(1-math.exp(-t_pulse/τ))
+            T0_cu = 20  #physical constant
+            _rho_cu = rho_0_cu * (1 + α_cu * (T_max-T0_cu))
+            AWG = None  #wire gauge
+            d_wb = 8.251463 * 0.8905257**(self.AWG)/1000    #wire diameter [m]
+            N = A_s*K_wb*np.pi*(d_wb/2)**2      #number of turns
+
+            R_slot_over_Lst_N2 = 4*_rho_cu/(A_s*K_wb)     #resistance per slot, divided by L_st*N^2
+            I_max = 1/N*np.sqrt((2*np.pi*R_s*h(T_ss_pk-T_amb))/(N_s*R_slot_over_Lst_N2))
+
+            V_s = np.sqrt(V^2+(L*p*Ω*I)^2)
+            lambda_bar = 4*N*B_g*l_u*r_r
+
+            V_s_max_csv = V_s/(lambda_bar*p*G)
+            f_max_csv = 3/2*lambda_bar*p*I_max*G    #find right equation for generator torque
+
+            interp_power_sur = interpolate.interp2d(force, voltage, power_surrogate)
+            P_max_csv = interp_power_sur(V_s_max_csv, f_max_csv)
+
+            ## Calculating max and base rotational speed
+
+            # V_DC = 600  #DC link voltage (V)
+            # lambda_bar = 4*PMSG_Outer.N_c*B_g*PMSG_Outer.l_u*PMSG_Outer.R_a
+            # omega_max = V_DC/(math.sqrt(3)*p*lambda_bar)
+
+            # def _NI_from_steady_temp(self, T_ss):
+            #     # notebook page 8
+            #     num = 2 * math.pi * self.R_so * self.h * (T_ss - self.T_amb)
+            #     denom = self.N_s * self._R_slot_over_Lst_N2(self.T_max)
+            #     NI = math.sqrt(num / denom) # amps rms
+            #     NI = NI * math.sqrt(2) # amps peak
+            #     return NI
+            # def T_ss_pk(self):
+            #     exp_term = 1 - math.exp(-self.t_pulse / self.tau)
+            #     return self.T_start + (self.T_max - self.T_start) / exp_term
+            # def I_max(self):
+            #     # current, in amps peak (amplitude, not peak-to-peak) per phase
+            #     NI = self._NI_from_steady_temp(self.T_ss_pk)
+            #     return NI / self.N
+            # sqrt_term = 1/math.sqrt((L_q*I_max)**2+lambda_bar**2)
+            # omega_base = 1/p*V_DC/math.sqrt(3)*sqrt_term
+
+        
         # Calculating Carter factor for stator and effective air gap length
         gamma = (
             4
