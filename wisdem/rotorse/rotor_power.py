@@ -6,12 +6,12 @@ January 2020
 """
 
 import logging
-
+import math
 import numpy as np
 from openmdao.api import Group, ExplicitComponent
 from scipy.optimize import brentq, minimize, minimize_scalar
 from scipy.interpolate import PchipInterpolator
-
+import matplotlib.pyplot as plt
 from wisdem.ccblade.Polar import Polar
 from wisdem.ccblade.ccblade import CCBlade, CCAirfoil
 from wisdem.commonse.utilities import smooth_abs, smooth_min, linspace_with_deriv
@@ -33,42 +33,42 @@ class RotorPower(Group):
             "powercurve",
             RegulatedPowerCurve(modeling_options=modeling_options),
             promotes=[
-                "v_min",
-                "v_max",
+                # "v_min",
+                # "v_max",
                 "rated_power",
                 "omega_min",
                 "omega_max",
-                "control_maxTS",
-                "tsr_operational",
-                "control_pitch",
+                # "control_maxTS",
+                # "tsr_operational",
+                # "control_pitch",
                 "drivetrainType",
-                "r",
-                "chord",
-                "theta",
-                "Rhub",
-                "Rtip",
-                "hub_height",
-                "precone",
-                "tilt",
-                "yaw",
-                "precurve",
-                "precurveTip",
-                "presweep",
-                "presweepTip",
-                "airfoils_aoa",
-                "airfoils_Re",
-                "airfoils_cl",
-                "airfoils_cd",
-                "airfoils_cm",
-                "nBlades",
-                "rho",
-                "mu",
-                "shearExp",
-                "hubloss",
-                "tiploss",
-                "wakerotation",
-                "usecd",
-                "nSector",
+                # "r",
+                # "chord",
+                # "theta",
+                # "Rhub",
+                # "Rtip",
+                # "hub_height",
+                # "precone",
+                # "tilt",
+                # "yaw",
+                # "precurve",
+                # "precurveTip",
+                # "presweep",
+                # "presweepTip",
+                # "airfoils_aoa",
+                # "airfoils_Re",
+                # "airfoils_cl",
+                # "airfoils_cd",
+                # "airfoils_cm",
+                # "nBlades",
+                # "rho",
+                # "mu",
+                # "shearExp",
+                # "hubloss",
+                # "tiploss",
+                # "wakerotation",
+                # "usecd",
+                # "nSector",
             ],
         )
         self.add_subsystem("gust", GustETM(std=modeling_options["WISDEM"]["RotorSE"]["gust_std"]))
@@ -86,41 +86,41 @@ class RotorPower(Group):
         self.connect("powercurve.P_spline", "aep.P")
 
 
-class GustETM(ExplicitComponent):
-    # OpenMDAO component that generates an "equivalent gust" wind speed by summing an user-defined wind speed at hub height with 3 times sigma. sigma is the turbulent wind speed standard deviation for the extreme turbulence model, see IEC-61400-1 Eq. 19 paragraph 6.3.2.3
+# class GustETM(ExplicitComponent):
+#     # OpenMDAO component that generates an "equivalent gust" wind speed by summing an user-defined wind speed at hub height with 3 times sigma. sigma is the turbulent wind speed standard deviation for the extreme turbulence model, see IEC-61400-1 Eq. 19 paragraph 6.3.2.3
 
-    def initialize(self):
-        # number of standard deviations for strength of gust
-        self.options.declare("std", default=3.0)
+#     def initialize(self):
+#         # number of standard deviations for strength of gust
+#         self.options.declare("std", default=3.0)
 
-    def setup(self):
-        # Inputs
-        self.add_input("V_mean", val=0.0, units="m/s", desc="IEC average wind speed for turbine class")
-        self.add_input("V_hub", val=0.0, units="m/s", desc="hub height wind speed")
-        self.add_discrete_input("turbulence_class", val="A", desc="IEC turbulence class")
+#     def setup(self):
+#         # Inputs
+#         self.add_input("V_mean", val=0.0, units="m/s", desc="IEC average wind speed for turbine class")
+#         self.add_input("V_hub", val=0.0, units="m/s", desc="hub height wind speed")
+#         self.add_discrete_input("turbulence_class", val="A", desc="IEC turbulence class")
 
-        # Output
-        self.add_output("V_gust", val=0.0, units="m/s", desc="gust wind speed")
+#         # Output
+#         self.add_output("V_gust", val=0.0, units="m/s", desc="gust wind speed")
 
-    def compute(self, inputs, outputs, discrete_inputs, discrete_outputs):
-        V_mean = inputs["V_mean"]
-        V_hub = inputs["V_hub"]
-        std = self.options["std"]
-        turbulence_class = discrete_inputs["turbulence_class"]
+#     def compute(self, inputs, outputs, discrete_inputs, discrete_outputs):
+#         V_mean = inputs["V_mean"]
+#         V_hub = inputs["V_hub"]
+#         std = self.options["std"]
+#         turbulence_class = discrete_inputs["turbulence_class"]
 
-        if turbulence_class.upper() == "A":
-            Iref = 0.16
-        elif turbulence_class.upper() == "B":
-            Iref = 0.14
-        elif turbulence_class.upper() == "C":
-            Iref = 0.12
-        else:
-            raise ValueError("Unknown Turbulence Class: " + str(turbulence_class) + " . Permitted values are A / B / C")
+#         if turbulence_class.upper() == "A":
+#             Iref = 0.16
+#         elif turbulence_class.upper() == "B":
+#             Iref = 0.14
+#         elif turbulence_class.upper() == "C":
+#             Iref = 0.12
+#         else:
+#             raise ValueError("Unknown Turbulence Class: " + str(turbulence_class) + " . Permitted values are A / B / C")
 
-        c = 2.0
-        sigma = c * Iref * (0.072 * (V_mean / c + 3) * (V_hub / c - 4) + 10)
-        V_gust = V_hub + std * sigma
-        outputs["V_gust"] = V_gust
+#         c = 2.0
+#         sigma = c * Iref * (0.072 * (V_mean / c + 3) * (V_hub / c - 4) + 10)
+#         V_gust = V_hub + std * sigma
+#         outputs["V_gust"] = V_gust
 
 
 class RegulatedPowerCurve(Group):
@@ -161,19 +161,11 @@ class ComputePowerCurve(ExplicitComponent):
             self.thrust_shaving_coeff = modeling_options["WISDEM"]["RotorSE"]["thrust_shaving_coeff"]
 
         # parameters
-        self.add_input("v_min", val=0.0, units="m/s", desc="cut-in wind speed")
-        self.add_input("v_max", val=0.0, units="m/s", desc="cut-out wind speed")
         self.add_input("rated_power", val=0.0, units="W", desc="electrical rated power")
         self.add_input("omega_min", val=0.0, units="rpm", desc="minimum allowed rotor rotation speed")
-        self.add_input("omega_max", val=0.0, units="rpm", desc="maximum allowed rotor rotation speed")
-        self.add_input("control_maxTS", val=0.0, units="m/s", desc="maximum allowed blade tip speed")
-        self.add_input("tsr_operational", val=0.0, desc="tip-speed ratio in Region 2 (should be optimized externally)")
-        self.add_input(
-            "control_pitch",
-            val=0.0,
-            units="deg",
-            desc="pitch angle in region 2 (and region 3 for fixed pitch machines)",
-        )
+        self.add_input("omega_max", val=0.0, units="rpm", desc="maximum allowed rotor rotation speed, based off of when torque=0")
+        self.add_input("Ns", val=1, desc="number of slots")
+        self.add_input("Nm", val=1, desc="number of poles (magnets)")
         self.add_discrete_input("drivetrainType", val="GEARED")
         self.add_input("gearbox_efficiency", val=1.0)
         self.add_input(
@@ -181,109 +173,14 @@ class ComputePowerCurve(ExplicitComponent):
             val=np.ones(self.n_pc),
             desc="Generator efficiency at various rpm values to support table lookup",
         )
-        self.add_input(
-            "lss_rpm",
-            val=np.zeros(self.n_pc),
-            units="rpm",
-            desc="Low speed shaft RPM values at which the generator efficiency values are given",
-        )
-
-        self.add_input(
-            "r",
-            val=np.zeros(n_span),
-            units="m",
-            desc="radial locations where blade is defined (should be increasing and not go all the way to hub or tip)",
-        )
-        self.add_input("chord", val=np.zeros(n_span), units="m", desc="chord length at each section")
-        self.add_input(
-            "theta",
-            val=np.zeros(n_span),
-            units="deg",
-            desc="twist angle at each section (positive decreases angle of attack)",
-        )
-        self.add_input("Rhub", val=0.0, units="m", desc="hub radius")
-        self.add_input("Rtip", val=0.0, units="m", desc="tip radius")
-        self.add_input("hub_height", val=0.0, units="m", desc="hub height")
-        self.add_input("precone", val=0.0, units="deg", desc="precone angle")
-        self.add_input("tilt", val=0.0, units="deg", desc="shaft tilt")
-        self.add_input("yaw", val=0.0, units="deg", desc="yaw error")
-        self.add_input("precurve", val=np.zeros(n_span), units="m", desc="precurve at each section")
-        self.add_input("precurveTip", val=0.0, units="m", desc="precurve at tip")
-        self.add_input("presweep", val=np.zeros(n_span), units="m", desc="presweep at each section")
-        self.add_input("presweepTip", val=0.0, units="m", desc="presweep at tip")
-
-        # self.add_discrete_input('airfoils',  val=[0]*n_span,                      desc='CCAirfoil instances')
-        self.add_input("airfoils_cl", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="lift coefficients, spanwise")
-        self.add_input("airfoils_cd", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="drag coefficients, spanwise")
-        self.add_input("airfoils_cm", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="moment coefficients, spanwise")
-        self.add_input("airfoils_aoa", val=np.zeros((n_aoa)), units="deg", desc="angle of attack grid for polars")
-        self.add_input("airfoils_Re", val=np.zeros((n_Re)), desc="Reynolds numbers of polars")
-        self.add_discrete_input("nBlades", val=0, desc="number of blades")
-        self.add_input("rho", val=1.225, units="kg/m**3", desc="density of air")
-        self.add_input("mu", val=1.81e-5, units="kg/(m*s)", desc="dynamic viscosity of air")
-        self.add_input("shearExp", val=0.0, desc="shear exponent")
-        self.add_discrete_input(
-            "nSector", val=4, desc="number of sectors to divide rotor face into in computing thrust and power"
-        )
-        self.add_discrete_input("tiploss", val=True, desc="include Prandtl tip loss model")
-        self.add_discrete_input("hubloss", val=True, desc="include Prandtl hub loss model")
-        self.add_discrete_input(
-            "wakerotation",
-            val=True,
-            desc="include effect of wake rotation (i.e., tangential induction factor is nonzero)",
-        )
-        self.add_discrete_input("usecd", val=True, desc="use drag coefficient in computing induction factors")
-
+        self.add_input("V_DC", val=1, units="V", desc="DC link voltage")
+        
         # outputs
-        self.add_output("V", val=np.zeros(self.n_pc), units="m/s", desc="wind vector")
         self.add_output("Omega", val=np.zeros(self.n_pc), units="rpm", desc="rotor rotational speed")
-        self.add_output("pitch", val=np.zeros(self.n_pc), units="deg", desc="rotor pitch schedule")
         self.add_output("P", val=np.zeros(self.n_pc), units="W", desc="rotor electrical power")
         self.add_output("P_aero", val=np.zeros(self.n_pc), units="W", desc="rotor mechanical power")
-        self.add_output("T", val=np.zeros(self.n_pc), units="N", desc="rotor aerodynamic thrust")
-        self.add_output("Q", val=np.zeros(self.n_pc), units="N*m", desc="rotor aerodynamic torque")
-        self.add_output("M", val=np.zeros(self.n_pc), units="N*m", desc="blade root moment")
-        self.add_output("Cp", val=np.zeros(self.n_pc), desc="rotor electrical power coefficient")
-        self.add_output("Cp_aero", val=np.zeros(self.n_pc), desc="rotor aerodynamic power coefficient")
-        self.add_output("Ct_aero", val=np.zeros(self.n_pc), desc="rotor aerodynamic thrust coefficient")
-        self.add_output("Cq_aero", val=np.zeros(self.n_pc), desc="rotor aerodynamic torque coefficient")
-        self.add_output("Cm_aero", val=np.zeros(self.n_pc), desc="rotor aerodynamic moment coefficient")
-        self.add_output("ax_induct_rotor", val=np.zeros(self.n_pc), desc="rotor aerodynamic induction")
-
-        self.add_output("V_R25", val=0.0, units="m/s", desc="region 2.5 transition wind speed")
-        self.add_output("rated_V", val=0.0, units="m/s", desc="rated wind speed")
         self.add_output("rated_Omega", val=0.0, units="rpm", desc="rotor rotation speed at rated")
-        self.add_output("rated_pitch", val=0.0, units="deg", desc="pitch setting at rated")
-        self.add_output("rated_T", val=0.0, units="N", desc="rotor aerodynamic thrust at rated")
-        self.add_output("rated_Q", val=0.0, units="N*m", desc="rotor aerodynamic torque at rated")
         self.add_output("rated_mech", val=0.0, units="W", desc="Mechanical shaft power at rated")
-        self.add_output(
-            "ax_induct_regII", val=np.zeros(n_span), desc="rotor axial induction at cut-in wind speed along blade span"
-        )
-        self.add_output(
-            "tang_induct_regII",
-            val=np.zeros(n_span),
-            desc="rotor tangential induction at cut-in wind speed along blade span",
-        )
-        self.add_output(
-            "aoa_regII",
-            val=np.zeros(n_span),
-            units="deg",
-            desc="angle of attack distribution along blade span at cut-in wind speed",
-        )
-        self.add_output(
-            "L_D",
-            val=np.zeros(n_span),
-            desc="Lift over drag distribution along blade span at cut-in wind speed",
-        )
-        self.add_output("Cp_regII", val=0.0, desc="power coefficient at cut-in wind speed")
-        self.add_output("Ct_regII", val=0.0, desc="thrust coefficient at cut-in wind speed")
-        self.add_output(
-            "cl_regII", val=np.zeros(n_span), desc="lift coefficient distribution along blade span at cut-in wind speed"
-        )
-        self.add_output(
-            "cd_regII", val=np.zeros(n_span), desc="drag coefficient distribution along blade span at cut-in wind speed"
-        )
         self.add_output("rated_efficiency", val=1.0, desc="Efficiency at rated conditions")
 
         # self.declare_partials('*', '*', method='fd', form='central', step=1e-6)
@@ -328,70 +225,10 @@ class ComputePowerCurve(ExplicitComponent):
                 nBlades=discrete_inputs["nBlades"],
             )
 
-        # Create Airfoil class instances
-        af = [None] * self.n_span
-        for i in range(self.n_span):
-            if self.n_tab > 1:
-                ref_tab = int(np.floor(self.n_tab / 2))
-                af[i] = CCAirfoil(
-                    inputs["airfoils_aoa"],
-                    inputs["airfoils_Re"],
-                    inputs["airfoils_cl"][i, :, :, ref_tab],
-                    inputs["airfoils_cd"][i, :, :, ref_tab],
-                    inputs["airfoils_cm"][i, :, :, ref_tab],
-                )
-            else:
-                af[i] = CCAirfoil(
-                    inputs["airfoils_aoa"],
-                    inputs["airfoils_Re"],
-                    inputs["airfoils_cl"][i, :, :, 0],
-                    inputs["airfoils_cd"][i, :, :, 0],
-                    inputs["airfoils_cm"][i, :, :, 0],
-                )
-
-        self.ccblade = CCBlade(
-            inputs["r"],
-            inputs["chord"],
-            inputs["theta"],
-            af,
-            inputs["Rhub"][0],
-            inputs["Rtip"][0],
-            discrete_inputs["nBlades"],
-            inputs["rho"][0],
-            inputs["mu"][0],
-            inputs["precone"][0],
-            inputs["tilt"][0],
-            inputs["yaw"][0],
-            inputs["shearExp"][0],
-            inputs["hub_height"][0],
-            discrete_inputs["nSector"],
-            inputs["precurve"],
-            inputs["precurveTip"][0],
-            inputs["presweep"],
-            inputs["presweepTip"][0],
-            discrete_inputs["tiploss"],
-            discrete_inputs["hubloss"],
-            discrete_inputs["wakerotation"],
-            discrete_inputs["usecd"],
-        )
-
-        # JPJ: what is this grid for? Seems to be a special distribution of velocities
-        # for the hub
-        grid0 = np.cumsum(np.abs(np.diff(np.cos(np.linspace(-np.pi / 4.0, np.pi / 2.0, self.n_pc)))))
-        grid1 = (grid0 - grid0[0]) / (grid0[-1] - grid0[0])
-        Uhub = grid1 * (inputs["v_max"] - inputs["v_min"]) + inputs["v_min"]
-
-        P_aero = np.zeros(Uhub.shape)
-        Cp_aero = np.zeros(Uhub.shape)
-        Ct_aero = np.zeros(Uhub.shape)
-        Cq_aero = np.zeros(Uhub.shape)
-        Cm_aero = np.zeros(Uhub.shape)
-        P = np.zeros(Uhub.shape)
-        Cp = np.zeros(Uhub.shape)
-        T = np.zeros(Uhub.shape)
-        Q = np.zeros(Uhub.shape)
-        M = np.zeros(Uhub.shape)
-        pitch = np.zeros(Uhub.shape) + inputs["control_pitch"]
+        # Calculate power matrix
+        V = (B_c+K_c/s)*I
+        Ω = G*s*X
+        V_s = math.sqrt(V**2+(L*p*Ω*I)**2) 
 
         # Unpack variables
         P_rated = float(inputs["rated_power"][0])
@@ -402,9 +239,6 @@ class ComputePowerCurve(ExplicitComponent):
         ## POWERCURVE PRELIMS ##
         # Set rotor speed based on TSR
         Omega_tsr = Uhub * tsr / R_tip
-
-        # Determine maximum rotor speed (rad/s)- either by TS or by control input
-        Omega_max = min([inputs["control_maxTS"] / R_tip, inputs["omega_max"] * np.pi / 30.0])
 
         # Apply maximum and minimum rotor speed limits
         Omega_min = inputs["omega_min"] * np.pi / 30.0
@@ -830,128 +664,128 @@ class ComputePowerCurve(ExplicitComponent):
                 outputs["Ct_regII"] = Ct_aero[i]
         outputs["ax_induct_rotor"] = ax_induct_rotor
 
-class ComputeSplines(ExplicitComponent):
-    """
-    Compute splined quantities for V, P, and Omega.
-    """
+# class ComputeSplines(ExplicitComponent):
+#     """
+#     Compute splined quantities for V, P, and Omega.
+#     """
 
-    def initialize(self):
-        self.options.declare("modeling_options")
+#     def initialize(self):
+#         self.options.declare("modeling_options")
 
-    def setup(self):
-        modeling_options = self.options["modeling_options"]
-        self.n_pc = modeling_options["WISDEM"]["RotorSE"]["n_pc"]
-        self.n_pc_spline = modeling_options["WISDEM"]["RotorSE"]["n_pc_spline"]
+#     def setup(self):
+#         modeling_options = self.options["modeling_options"]
+#         self.n_pc = modeling_options["WISDEM"]["RotorSE"]["n_pc"]
+#         self.n_pc_spline = modeling_options["WISDEM"]["RotorSE"]["n_pc_spline"]
 
-        self.add_input("v_min", val=0.0, units="m/s", desc="cut-in wind speed")
-        self.add_input("v_max", val=0.0, units="m/s", desc="cut-out wind speed")
-        self.add_input("V", val=np.zeros(self.n_pc), units="m/s", desc="wind vector")
-        self.add_input("Omega", val=np.zeros(self.n_pc), units="rpm", desc="rotor rotational speed")
-        self.add_input("P", val=np.zeros(self.n_pc), units="W", desc="rotor electrical power")
+#         self.add_input("v_min", val=0.0, units="m/s", desc="cut-in wind speed")
+#         self.add_input("v_max", val=0.0, units="m/s", desc="cut-out wind speed")
+#         self.add_input("V", val=np.zeros(self.n_pc), units="m/s", desc="wind vector")
+#         self.add_input("Omega", val=np.zeros(self.n_pc), units="rpm", desc="rotor rotational speed")
+#         self.add_input("P", val=np.zeros(self.n_pc), units="W", desc="rotor electrical power")
 
-        self.add_output("V_spline", val=np.zeros(self.n_pc_spline), units="m/s", desc="wind vector")
-        self.add_output("P_spline", val=np.zeros(self.n_pc_spline), units="W", desc="rotor electrical power")
-        self.add_output("Omega_spline", val=np.zeros(self.n_pc_spline), units="rpm", desc="omega")
+#         self.add_output("V_spline", val=np.zeros(self.n_pc_spline), units="m/s", desc="wind vector")
+#         self.add_output("P_spline", val=np.zeros(self.n_pc_spline), units="W", desc="rotor electrical power")
+#         self.add_output("Omega_spline", val=np.zeros(self.n_pc_spline), units="rpm", desc="omega")
 
-        self.declare_partials(of="V_spline", wrt="v_min")
-        self.declare_partials(of="V_spline", wrt="v_max")
+#         self.declare_partials(of="V_spline", wrt="v_min")
+#         self.declare_partials(of="V_spline", wrt="v_max")
 
-        self.declare_partials(of="P_spline", wrt="v_min", method="fd")
-        self.declare_partials(of="P_spline", wrt="v_max", method="fd")
-        self.declare_partials(of="P_spline", wrt="V", method="fd")
-        self.declare_partials(of="P_spline", wrt="P", method="fd")
+#         self.declare_partials(of="P_spline", wrt="v_min", method="fd")
+#         self.declare_partials(of="P_spline", wrt="v_max", method="fd")
+#         self.declare_partials(of="P_spline", wrt="V", method="fd")
+#         self.declare_partials(of="P_spline", wrt="P", method="fd")
 
-        self.declare_partials(of="Omega_spline", wrt="v_min", method="fd")
-        self.declare_partials(of="Omega_spline", wrt="v_max", method="fd")
-        self.declare_partials(of="Omega_spline", wrt="V", method="fd")
-        self.declare_partials(of="Omega_spline", wrt="Omega", method="fd")
+#         self.declare_partials(of="Omega_spline", wrt="v_min", method="fd")
+#         self.declare_partials(of="Omega_spline", wrt="v_max", method="fd")
+#         self.declare_partials(of="Omega_spline", wrt="V", method="fd")
+#         self.declare_partials(of="Omega_spline", wrt="Omega", method="fd")
 
-    def compute(self, inputs, outputs):
-        # Fit spline to powercurve for higher grid density
-        V_spline = np.linspace(inputs["v_min"], inputs["v_max"], self.n_pc_spline)
-        spline = PchipInterpolator(inputs["V"], inputs["P"])
-        P_spline = spline(V_spline)
-        spline = PchipInterpolator(inputs["V"], inputs["Omega"])
-        Omega_spline = spline(V_spline)
+    # def compute(self, inputs, outputs):
+    #     # Fit spline to powercurve for higher grid density
+    #     V_spline = np.linspace(inputs["v_min"], inputs["v_max"], self.n_pc_spline)
+    #     spline = PchipInterpolator(inputs["V"], inputs["P"])
+    #     P_spline = spline(V_spline)
+    #     spline = PchipInterpolator(inputs["V"], inputs["Omega"])
+    #     Omega_spline = spline(V_spline)
 
-        # outputs
-        outputs["V_spline"] = V_spline.flatten()
-        outputs["P_spline"] = P_spline.flatten()
-        outputs["Omega_spline"] = Omega_spline.flatten()
+    #     # outputs
+    #     outputs["V_spline"] = V_spline.flatten()
+    #     outputs["P_spline"] = P_spline.flatten()
+    #     outputs["Omega_spline"] = Omega_spline.flatten()
 
-    def compute_partials(self, inputs, partials):
-        linspace_with_deriv
-        V_spline, dy_dstart, dy_dstop = linspace_with_deriv(inputs["v_min"], inputs["v_max"], self.n_pc_spline)
-        partials["V_spline", "v_min"] = dy_dstart
-        partials["V_spline", "v_max"] = dy_dstop
+    # def compute_partials(self, inputs, partials):
+    #     linspace_with_deriv
+    #     V_spline, dy_dstart, dy_dstop = linspace_with_deriv(inputs["v_min"], inputs["v_max"], self.n_pc_spline)
+    #     partials["V_spline", "v_min"] = dy_dstart
+    #     partials["V_spline", "v_max"] = dy_dstop
 
 
 # Class to define a constraint so that the blade cannot operate in stall conditions
-class NoStallConstraint(ExplicitComponent):
-    def initialize(self):
-        self.options.declare("modeling_options")
+# class NoStallConstraint(ExplicitComponent):
+#     def initialize(self):
+#         self.options.declare("modeling_options")
 
-    def setup(self):
-        modeling_options = self.options["modeling_options"]
-        self.n_span = n_span = modeling_options["WISDEM"]["RotorSE"]["n_span"]
-        self.n_aoa = n_aoa = modeling_options["WISDEM"]["RotorSE"]["n_aoa"]  # Number of angle of attacks
-        self.n_Re = n_Re = modeling_options["WISDEM"]["RotorSE"]["n_Re"]  # Number of Reynolds, so far hard set at 1
-        self.n_tab = n_tab = modeling_options["WISDEM"]["RotorSE"][
-            "n_tab"
-        ]  # Number of tabulated data. For distributed aerodynamic control this could be > 1
+#     def setup(self):
+#         modeling_options = self.options["modeling_options"]
+#         self.n_span = n_span = modeling_options["WISDEM"]["RotorSE"]["n_span"]
+#         self.n_aoa = n_aoa = modeling_options["WISDEM"]["RotorSE"]["n_aoa"]  # Number of angle of attacks
+#         self.n_Re = n_Re = modeling_options["WISDEM"]["RotorSE"]["n_Re"]  # Number of Reynolds, so far hard set at 1
+#         self.n_tab = n_tab = modeling_options["WISDEM"]["RotorSE"][
+#             "n_tab"
+#         ]  # Number of tabulated data. For distributed aerodynamic control this could be > 1
 
-        self.add_input(
-            "s",
-            val=np.zeros(n_span),
-            desc="1D array of the non-dimensional spanwise grid defined along blade axis (0-blade root, 1-blade tip)",
-        )
-        self.add_input("aoa_along_span", val=np.zeros(n_span), units="deg", desc="Angle of attack along blade span")
-        self.add_input("stall_margin", val=3.0, units="deg", desc="Minimum margin from the stall angle")
-        self.add_input(
-            "min_s",
-            val=0.25,
-            desc="Minimum nondimensional coordinate along blade span where to define the constraint (blade root typically stalls)",
-        )
-        self.add_input("airfoils_cl", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="lift coefficients, spanwise")
-        self.add_input("airfoils_cd", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="drag coefficients, spanwise")
-        self.add_input("airfoils_cm", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="moment coefficients, spanwise")
-        self.add_input("airfoils_aoa", val=np.zeros((n_aoa)), units="deg", desc="angle of attack grid for polars")
+#         self.add_input(
+#             "s",
+#             val=np.zeros(n_span),
+#             desc="1D array of the non-dimensional spanwise grid defined along blade axis (0-blade root, 1-blade tip)",
+#         )
+#         self.add_input("aoa_along_span", val=np.zeros(n_span), units="deg", desc="Angle of attack along blade span")
+#         self.add_input("stall_margin", val=3.0, units="deg", desc="Minimum margin from the stall angle")
+#         self.add_input(
+#             "min_s",
+#             val=0.25,
+#             desc="Minimum nondimensional coordinate along blade span where to define the constraint (blade root typically stalls)",
+#         )
+#         self.add_input("airfoils_cl", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="lift coefficients, spanwise")
+#         self.add_input("airfoils_cd", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="drag coefficients, spanwise")
+#         self.add_input("airfoils_cm", val=np.zeros((n_span, n_aoa, n_Re, n_tab)), desc="moment coefficients, spanwise")
+#         self.add_input("airfoils_aoa", val=np.zeros((n_aoa)), units="deg", desc="angle of attack grid for polars")
 
-        self.add_output(
-            "no_stall_constraint",
-            val=np.zeros(n_span),
-            desc="Constraint, ratio between angle of attack plus a margin and stall angle",
-        )
-        self.add_output(
-            "stall_angle_along_span", val=np.zeros(n_span), units="deg", desc="Stall angle along blade span"
-        )
+#         self.add_output(
+#             "no_stall_constraint",
+#             val=np.zeros(n_span),
+#             desc="Constraint, ratio between angle of attack plus a margin and stall angle",
+#         )
+#         self.add_output(
+#             "stall_angle_along_span", val=np.zeros(n_span), units="deg", desc="Stall angle along blade span"
+#         )
 
-    def compute(self, inputs, outputs):
-        i_min = np.argmin(np.abs(inputs["min_s"] - inputs["s"]))
-        n_span = len(inputs["s"])
+#     def compute(self, inputs, outputs):
+#         i_min = np.argmin(np.abs(inputs["min_s"] - inputs["s"]))
+#         n_span = len(inputs["s"])
 
-        for i in range(n_span):
-            unsteady = eval_unsteady(
-                inputs["airfoils_aoa"],
-                inputs["airfoils_cl"][i, :, 0, 0],
-                inputs["airfoils_cd"][i, :, 0, 0],
-                inputs["airfoils_cm"][i, :, 0, 0],
-            )
-            outputs["stall_angle_along_span"][i] = unsteady["alpha1"]
-            if outputs["stall_angle_along_span"][i] == 0:
-                outputs["stall_angle_along_span"][i] = 1e-6  # To avoid nan
+#         for i in range(n_span):
+#             unsteady = eval_unsteady(
+#                 inputs["airfoils_aoa"],
+#                 inputs["airfoils_cl"][i, :, 0, 0],
+#                 inputs["airfoils_cd"][i, :, 0, 0],
+#                 inputs["airfoils_cm"][i, :, 0, 0],
+#             )
+#             outputs["stall_angle_along_span"][i] = unsteady["alpha1"]
+#             if outputs["stall_angle_along_span"][i] == 0:
+#                 outputs["stall_angle_along_span"][i] = 1e-6  # To avoid nan
 
-        for i in range(i_min, n_span):
-            outputs["no_stall_constraint"][i] = (inputs["aoa_along_span"][i] + inputs["stall_margin"][0]) / outputs[
-                "stall_angle_along_span"
-            ][i]
+#         for i in range(i_min, n_span):
+#             outputs["no_stall_constraint"][i] = (inputs["aoa_along_span"][i] + inputs["stall_margin"][0]) / outputs[
+#                 "stall_angle_along_span"
+#             ][i]
 
-            if outputs["stall_angle_along_span"][i] <= 1.0e-6:
-                outputs["no_stall_constraint"][i] = 0.0
+#             if outputs["stall_angle_along_span"][i] <= 1.0e-6:
+#                 outputs["no_stall_constraint"][i] = 0.0
 
-            logger.debug(
-                "Blade is violating the minimum margin to stall at span location %.2f %%" % (inputs["s"][i] * 100.0)
-            )
+#             logger.debug(
+#                 "Blade is violating the minimum margin to stall at span location %.2f %%" % (inputs["s"][i] * 100.0)
+#             )
 
 
 class AEP(ExplicitComponent):
@@ -1050,48 +884,48 @@ def compute_P_and_eff(aeroPower, ratedPower, Omega_rpm, drivetrainType, drivetra
     return aeroPower * eff, eff
 
 
-def eval_unsteady(alpha, cl, cd, cm):
-    # calculate unsteady coefficients from polars for OpenFAST's Aerodyn
+# def eval_unsteady(alpha, cl, cd, cm):
+#     # calculate unsteady coefficients from polars for OpenFAST's Aerodyn
 
-    unsteady = {}
-    Re = 1e6  # Does not factor into any calculations
-    mypolar = Polar(Re=Re, alpha=alpha, cl=cl, cd=cd, cm=cm, compute_params=True, radians=False)
-    (alpha0, alpha1, alpha2, cnSlope, cn1, cn2, cd0, cm0) = mypolar.unsteadyParams()
-    unsteady["alpha0"] = alpha0
-    unsteady["alpha1"] = alpha1
-    unsteady["alpha2"] = alpha2
-    unsteady["Cd0"] = cd0
-    unsteady["Cm0"] = cm0
-    unsteady["Cn1"] = cn1
-    unsteady["Cn2"] = cn2
-    unsteady["C_nalpha"] = cnSlope
-    unsteady["eta_e"] = 1
-    unsteady["T_f0"] = "Default"
-    unsteady["T_V0"] = "Default"
-    unsteady["T_p"] = "Default"
-    unsteady["T_VL"] = "Default"
-    unsteady["b1"] = "Default"
-    unsteady["b2"] = "Default"
-    unsteady["b5"] = "Default"
-    unsteady["A1"] = "Default"
-    unsteady["A2"] = "Default"
-    unsteady["A5"] = "Default"
-    unsteady["S1"] = 0
-    unsteady["S2"] = 0
-    unsteady["S3"] = 0
-    unsteady["S4"] = 0
-    unsteady["St_sh"] = "Default"
-    unsteady["k0"] = 0
-    unsteady["k1"] = 0
-    unsteady["k2"] = 0
-    unsteady["k3"] = 0
-    unsteady["k1_hat"] = 0
-    unsteady["x_cp_bar"] = "Default"
-    unsteady["UACutout"] = "Default"
-    unsteady["filtCutOff"] = "Default"
-    unsteady["Alpha"] = alpha
-    unsteady["Cl"] = cl
-    unsteady["Cd"] = cd
-    unsteady["Cm"] = cm
+#     unsteady = {}
+#     Re = 1e6  # Does not factor into any calculations
+#     mypolar = Polar(Re=Re, alpha=alpha, cl=cl, cd=cd, cm=cm, compute_params=True, radians=False)
+#     (alpha0, alpha1, alpha2, cnSlope, cn1, cn2, cd0, cm0) = mypolar.unsteadyParams()
+#     unsteady["alpha0"] = alpha0
+#     unsteady["alpha1"] = alpha1
+#     unsteady["alpha2"] = alpha2
+#     unsteady["Cd0"] = cd0
+#     unsteady["Cm0"] = cm0
+#     unsteady["Cn1"] = cn1
+#     unsteady["Cn2"] = cn2
+#     unsteady["C_nalpha"] = cnSlope
+#     unsteady["eta_e"] = 1
+#     unsteady["T_f0"] = "Default"
+#     unsteady["T_V0"] = "Default"
+#     unsteady["T_p"] = "Default"
+#     unsteady["T_VL"] = "Default"
+#     unsteady["b1"] = "Default"
+#     unsteady["b2"] = "Default"
+#     unsteady["b5"] = "Default"
+#     unsteady["A1"] = "Default"
+#     unsteady["A2"] = "Default"
+#     unsteady["A5"] = "Default"
+#     unsteady["S1"] = 0
+#     unsteady["S2"] = 0
+#     unsteady["S3"] = 0
+#     unsteady["S4"] = 0
+#     unsteady["St_sh"] = "Default"
+#     unsteady["k0"] = 0
+#     unsteady["k1"] = 0
+#     unsteady["k2"] = 0
+#     unsteady["k3"] = 0
+#     unsteady["k1_hat"] = 0
+#     unsteady["x_cp_bar"] = "Default"
+#     unsteady["UACutout"] = "Default"
+#     unsteady["filtCutOff"] = "Default"
+#     unsteady["Alpha"] = alpha
+#     unsteady["Cl"] = cl
+#     unsteady["Cd"] = cd
+#     unsteady["Cm"] = cm
 
-    return unsteady
+#     return unsteady
